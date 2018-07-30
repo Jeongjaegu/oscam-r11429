@@ -178,7 +178,7 @@ static void *azbox_main_thread(void *cli)
 
 				memcpy(dest + 7, msg.buf + 12, msg.buf_len - 12 - 4);
 
-				dvbapi_parse_capmt(dest, 7 + msg.buf_len - 12 - 4, -1, NULL, 0, 0, 0);
+				dvbapi_parse_capmt(dest, 7 + msg.buf_len - 12 - 4, -1, NULL, 0, 0, 0, 0);
 				NULLFREE(dest);
 
 				unsigned char mask[12];
@@ -281,7 +281,7 @@ void azbox_send_dcw(struct s_client *client, ECM_REQUEST *er)
 			cs_log_dbg(D_DVBAPI, "cw not found");
 
 			if(demux[i].pidindex == -1)
-				{ dvbapi_try_next_caid(i, 0); }
+				{ dvbapi_try_next_caid(i, 0, 0); }
 
 			openxcas_stop_filter(openxcas_stream_id, OPENXCAS_FILTER_ECM);
 			openxcas_remove_filter(openxcas_stream_id, OPENXCAS_FILTER_ECM);
@@ -325,7 +325,7 @@ void azbox_send_dcw(struct s_client *client, ECM_REQUEST *er)
 	int32_t n;
 	for(n = 0; n < 2; n++)
 	{
-		if(memcmp(er->cw + (n * 8), demux[0].lastcw[n], 8) && memcmp(er->cw + (n * 8), nullcw, 8))
+		if(memcmp(er->cw + (n * 8), demux[0].lastcw[n], 8) && (memcmp(er->cw + (n * 8), nullcw, 8) != 0 || er->caid == 0x2600))
 		{
 			memcpy(demux[0].lastcw[n], er->cw + (n * 8), 8);
 			memcpy(openxcas_cw + (n * 8), er->cw + (n * 8), 8);

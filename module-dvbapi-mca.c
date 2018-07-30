@@ -454,7 +454,7 @@ static void *mca_main_thread(void *cli)
 				int new_len = mca_capmt_remove_duplicates(msg.buf + 2, msg.buf_len - 2);
 				if(new_len < msg.buf_len - 2)
 					{ cs_log_dump_dbg(D_DVBAPI, msg.buf + 2, new_len, "capmt (duplicates removed):"); }
-				int demux_id = dvbapi_parse_capmt(msg.buf + 2, new_len, -1, NULL, 0, 0, 0);
+				int demux_id = dvbapi_parse_capmt(msg.buf + 2, new_len, -1, NULL, 0, 0, 0, 0);
 
 
 				unsigned char mask[12];
@@ -563,7 +563,7 @@ void mca_send_dcw(struct s_client *client, ECM_REQUEST *er)
 			cs_log_dbg(D_DVBAPI, "cw not found");
 
 			if(demux[i].pidindex == -1)
-				{ dvbapi_try_next_caid(i, 0); }
+				{ dvbapi_try_next_caid(i, 0, 0); }
 
 			openxcas_stop_filter(openxcas_stream_id, OPENXCAS_FILTER_ECM);
 			openxcas_remove_filter(openxcas_stream_id, OPENXCAS_FILTER_ECM);
@@ -600,7 +600,9 @@ void mca_send_dcw(struct s_client *client, ECM_REQUEST *er)
 	int32_t n;
 	for(n = 0; n < 2; n++)
 	{
-		if((memcmp(er->cw + (n * 8), demux[0].lastcw[0], 8) && memcmp(er->cw + (n * 8), demux[0].lastcw[1], 8)) && memcmp(er->cw + (n * 8), nullcw, 8))
+		// 0x2600 used by biss and constant cw could be indeed zero
+		if((memcmp(er->cw + (n * 8), demux[0].lastcw[0], 8) && memcmp(er->cw + (n * 8), demux[0].lastcw[1], 8)) 
+			&& (memcmp(er->cw + (n * 8), nullcw, 8) !=0  || er->caid == 0x2600))
 		{
 			memcpy(demux[0].lastcw[n], er->cw + (n * 8), 8);
 			memcpy(openxcas_cw + (n * 8), er->cw + (n * 8), 8);

@@ -232,7 +232,7 @@ static int32_t NegotiateSessionKey_Tiger(struct s_reader *reader)
 	Signature(sign1, idea_key, tmp, 104);
 	rdr_log_dbg(reader, D_READER, "sign1: %s", cs_hexdump(0, sign1, 8, tmp2, sizeof(tmp2)));
 	rdr_log_dbg(reader, D_READER, "sign2: %s", cs_hexdump(0, parte_fija + 111, 8, tmp2, sizeof(tmp2)));
-	if(!memcmp(parte_fija + 111, sign1, 8) == 0)
+	if((!memcmp(parte_fija + 111, sign1, 8)) == 0)
 	{
 		rdr_log_dbg(reader, D_READER, "signature check nok");
 		rdr_log_dbg(reader, D_READER, "------------------------------------------");
@@ -622,7 +622,7 @@ static int32_t ParseDataType(struct s_reader *reader, unsigned char dt, unsigned
 		{
 			int32_t id = (cta_res[7] * 256) | cta_res[8];
 			int32_t offset = ((reader->caid == 0x1830 || reader->caid == 0x1843)
-							&& chid == 0x0BEA) ? -21 : 0;
+							&& chid == 0x0BEA) ? -35 : 0;
             
 			// todo: add entitlements to list
 			cs_add_entitlement(reader,
@@ -640,10 +640,12 @@ static int32_t ParseDataType(struct s_reader *reader, unsigned char dt, unsigned
 			// tier_date(b2i(2, cta_res+13)-0x7f7, de, 15);
 			rdr_log(reader, "|%04X|%04X    |%s  |%s  |", id, chid, ds, de);
 			addProvider(reader, cta_res);
-		}
+		} /* fallthrough */
 	case 0x08:
 	case 0x88:
-		if(cta_res[11] == 0x49) { decryptDT08(reader, cta_res); }
+		if(cta_res[11] == 0x49){
+			decryptDT08(reader, cta_res);
+		} /* fallthrough */
 	default:
 		return OK;
 	}
@@ -1081,7 +1083,7 @@ static int32_t nagra2_card_info(struct s_reader *reader)
 		rdr_log_dbg(reader, D_READER, "IRDINFO DONE");
 		CamStateRequest(reader);
 
-		if(!memcmp(reader->rom + 5, "181", 3) == 0)  //dt05 is not supported by rom181
+		if((!memcmp(reader->rom + 5, "181", 3)) == 0)  //dt05 is not supported by rom181
 		{
 			rdr_log(reader, "-----------------------------------------");
 			rdr_log(reader, "|id  |tier    |valid from  |valid to    |");

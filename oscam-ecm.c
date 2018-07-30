@@ -538,13 +538,13 @@ ECM_REQUEST *get_ecmtask(void)
 
 void cleanup_ecmtasks(struct s_client *cl)
 {
-	if(cl && !cl->account->usr) { return; }  //not for anonymous users!
+	if(!cl) { return; }
 
 	ECM_REQUEST *ecm;
 
 	//remove this clients ecm from queue. because of cache, just null the client:
 	cs_readlock(__func__, &ecmcache_lock);
-	for(ecm = ecmcwcache; ecm; ecm = ecm->next)
+	for(ecm = ecmcwcache; ecm && cl; ecm = ecm->next)
 	{
 		if(ecm->client == cl)
 		{
@@ -561,7 +561,7 @@ void cleanup_ecmtasks(struct s_client *cl)
 		if(check_client(rdr->client) && rdr->client->ecmtask)
 		{
 			int i;
-			for(i = 0; i < cfg.max_pending; i++)
+			for(i = 0; (i < cfg.max_pending) && cl; i++)
 			{
 				ecm = &rdr->client->ecmtask[i];
 				if(ecm->client == cl)
@@ -795,10 +795,10 @@ int32_t send_dcw(struct s_client *client, ECM_REQUEST *er)
 		{ snprintf(schaninfo, sizeof(schaninfo) - 1, " - %s", channame); }
 
 	if(er->msglog[0])
-		{ snprintf(sreason, sizeof(sreason) - 1, " (%s)", er->msglog); }
+		{ snprintf(sreason, sizeof(sreason) - 1, " (%.26s)", er->msglog); }
 #ifdef CW_CYCLE_CHECK
 	if(er->cwc_msg_log[0])
-		{ snprintf(scwcinfo, sizeof(scwcinfo) - 1, " (%s)", er->cwc_msg_log); }
+		{ snprintf(scwcinfo, sizeof(scwcinfo) - 1, " (%.26s)", er->cwc_msg_log); }
 #endif
 
 	cs_ftime(&tpe);
@@ -1028,7 +1028,7 @@ int32_t send_dcw(struct s_client *client, ECM_REQUEST *er)
 	}
 #endif
 
-	if(cfg.double_check && er->rc == E_FOUND && er->selected_reader && is_double_check_caid(er))
+	if(cfg.double_check && er->rc < E_NOTFOUND && er->selected_reader && is_double_check_caid(er))
 	{
 		if(er->checked == 0)   //First CW, save it and wait for next one
 		{
@@ -1042,11 +1042,12 @@ int32_t send_dcw(struct s_client *client, ECM_REQUEST *er)
 			if(memcmp(er->cw_checked, er->cw, sizeof(er->cw)) == 0)
 			{
 				er->checked++;
-				cs_log("DOUBLE CHECKED! %d. CW by %s idx %d cpti %d", er->checked, er->selected_reader->label, er->idx, er->msgid);
+				cs_log("CW matched by %s total matches %d idx %d cpti %d", er->selected_reader->label, er->checked, er->idx, er->msgid);
 			}
 			else
 			{
-				cs_log("DOUBLE CHECKED NONMATCHING! %d. CW by %s idx %d cpti %d", er->checked, er->selected_reader->label, er->idx, er->msgid);
+				er->checked--;
+				cs_log("CW mismatch by %s total matches %d idx %d cpti %d", er->selected_reader->label, er->checked, er->idx, er->msgid);
 			}
 		}
 		if(er->checked < 2)    //less as two same cw? mark as pending!
@@ -1291,7 +1292,7 @@ void chk_dcw(struct s_ecm_answer *ea)
 			ECM_REQUEST *er = ert;
 			debug_ecm(D_TRACE, "WARNING2: Different CWs %s from %s(%s)<>%s(%s): %s<>%s", buf,
 					  username(ea->reader ? ea->reader->client : ert->client), ip1,
-					  er->cacheex_src ? username(er->cacheex_src) : (ea->reader ? ea->reader->label : "unknown/csp"), ip2,
+					  er->cacheex_src ? username(er->cacheex_src) : (ert->selected_reader ? ert->selected_reader->label : "unknown/csp"), ip2,
 					  cw1, cw2);
 		}
 #endif
@@ -1343,6 +1344,9 @@ void chk_dcw(struct s_ecm_answer *ea)
 		ert->rcEx = 0;
 		ert->rc = ea->rc;
 		ert->grp |= eardr->grp;
+#ifdef HAVE_DVBAPI
+		ert->adapter_index = ea->er->adapter_index;
+#endif
 
 		break;
 	case E_INVALID:
@@ -1576,24 +1580,36 @@ int32_t write_ecm_answer(struct s_reader *reader, ECM_REQUEST *er, int8_t rc, ui
 	}
 
 	//SPECIAL CHECKs for rc
-	if(rc < E_NOTFOUND && cw && chk_is_null_CW(cw))    //if cw=0 by anticascading
+	if(rc < E_NOTFOUND && cw && chk_is_null_CW(cw) && er->caid !=0x2600) // 0x2600 used by biss and constant cw could be zero but still catch cw=0 by anticascading
 	{
 		rc = E_NOTFOUND;
 		cs_log_dbg(D_TRACE | D_LB, "WARNING: reader %s send fake cw, set rc=E_NOTFOUND!", reader ? reader->label : "-");
 	}
 
-	if(rc < E_NOTFOUND && cw && !chk_halfCW(er,cw)){
-		rc = E_NOTFOUND;
-		cs_log_dbg(D_TRACE | D_LB, "WARNING: reader %s send wrong swapped NDS cw, set rc=E_NOTFOUND!", reader ? reader->label : "-");
-	}
+
+
+ 	if(rc < E_NOTFOUND && cw && !chk_halfCW(er,cw)){
+ 		rc = E_NOTFOUND;
+ 		cs_log_dbg(D_TRACE | D_LB, "WARNING: reader %s send wrong swapped NDS cw, set rc=E_NOTFOUND!", reader ? reader->label : "-");
+ 	}
+
 
 	if(reader && cw && rc < E_NOTFOUND)
 	{
-		if(reader->disablecrccws == 0 && ((er->caid>>8)!=0x0E))
+		if(cfg.disablecrccws == 0 && reader->disablecrccws == 0 && ((er->caid >> 8) != 0x0E))
 		{
+			uint8_t selectedForIgnChecksum = chk_if_ignore_checksum(er, cfg.disablecrccws, &cfg.disablecrccws_only_for)
+					+ chk_if_ignore_checksum(er, reader->disablecrccws, &reader->disablecrccws_only_for);
+
 			for(i = 0; i < 16; i += 4)
 			{
 				c = ((cw[i] + cw[i + 1] + cw[i + 2]) & 0xff);
+
+				if((i!=12) && selectedForIgnChecksum && (cw[i + 3] != c)){
+					cs_log_dbg(D_TRACE, "notice: CW checksum check disabled for %04X:%06X", er->caid, er->prid);
+					break;
+				}
+
 				if(cw[i + 3] != c)
 				{
 					unsigned char nano = 0x00;
@@ -1690,7 +1706,7 @@ int32_t write_ecm_answer(struct s_reader *reader, ECM_REQUEST *er, int8_t rc, ui
 	if(!ea->is_pending)   //not for pending ea - only once for ea
 	{
 		//cache update
-		if(ea && ea->rc < E_NOTFOUND && ea->cw)
+		if(ea && (ea->rc < E_NOTFOUND) && (!chk_is_null_CW(ea->cw) && er->caid !=0x2600)) // 0x2600 used by biss and constant cw could be indeed zero
 			add_cache_from_reader(er, reader, er->csp_hash, er->ecmd5, ea->cw, er->caid, er->prid, er->srvid );
 
 		//readers stats for LB
@@ -2094,18 +2110,26 @@ void get_cw(struct s_client *client, ECM_REQUEST *er)
 		{ er->rc = E_EXPDATE; }
 
 	// out of timeframe
-	if(client->allowedtimeframe[0] && client->allowedtimeframe[1])
+	if(client->allowedtimeframe_set)
 	{
 		struct tm acttm;
 		localtime_r(&now, &acttm);
-		int32_t curtime = (acttm.tm_hour * 60) + acttm.tm_min;
-		int32_t mintime = client->allowedtimeframe[0];
-		int32_t maxtime = client->allowedtimeframe[1];
-		if(!((mintime <= maxtime && curtime > mintime && curtime < maxtime) || (mintime > maxtime && (curtime > mintime || curtime < maxtime))))
+		int32_t curday = acttm.tm_wday;
+		char *dest = strstr(weekdstr,"ALL");
+		int32_t all_idx = (dest - weekdstr)/3;
+		uint8_t allowed=0;
+		
+		// checkout if current time is allowed in the current day
+		allowed = CHECK_BIT(client->allowedtimeframe[curday][acttm.tm_hour][acttm.tm_min/30], (acttm.tm_min % 30));
+		
+		// or checkout if current time is allowed for all days
+		allowed |= CHECK_BIT(client->allowedtimeframe[all_idx][acttm.tm_hour][acttm.tm_min/30], (acttm.tm_min % 30));
+		
+		if(!(allowed))
 		{
 			er->rc = E_EXPDATE;
 		}
-		cs_log_dbg(D_TRACE, "Check Timeframe - result: %d, start: %d, current: %d, end: %d\n", er->rc, mintime, curtime, maxtime);
+		cs_log_dbg(D_TRACE, "Check Timeframe - result: %d, day:%s time: %02dH%02d, allowed: %s\n", er->rc, shortDay[curday], acttm.tm_hour, acttm.tm_min, allowed ? "true" : "false");
 	}
 
 	// user disabled

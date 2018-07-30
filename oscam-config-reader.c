@@ -509,10 +509,11 @@ void ftab_fn(const char *token, char *value, void *setting, long ftab_type, FILE
 	if(ftab_type & FTAB_READER)
 	{
 		struct s_reader *rdr = NULL;
-		if(ftab_type & FTAB_PROVID)     { rdr = container_of(setting, struct s_reader, ftab); }
-		if(ftab_type & FTAB_CHID)       { rdr = container_of(setting, struct s_reader, fchid); }
-		if(ftab_type & FTAB_FBPCAID)    { rdr = container_of(setting, struct s_reader, fallback_percaid); }
-		if(ftab_type & FTAB_LOCALCARDS) { rdr = container_of(setting, struct s_reader, localcards); }
+		if(ftab_type & FTAB_PROVID)      { rdr = container_of(setting, struct s_reader, ftab); }
+		if(ftab_type & FTAB_CHID)        { rdr = container_of(setting, struct s_reader, fchid); }
+		if(ftab_type & FTAB_FBPCAID)     { rdr = container_of(setting, struct s_reader, fallback_percaid); }
+		if(ftab_type & FTAB_LOCALCARDS)  { rdr = container_of(setting, struct s_reader, localcards); }
+		if(ftab_type & FTAB_IGNCHKSMCAID){ rdr = container_of(setting, struct s_reader, disablecrccws_only_for); }
 #ifdef WITH_EMU
 		if(ftab_type & FTAB_EMUAU)      { rdr = container_of(setting, struct s_reader, emu_auproviders); }
 #endif
@@ -700,6 +701,29 @@ static void ratelimitecm_fn(const char *token, char *value, void *setting, FILE 
 		{ fprintf_conf(f, token, "%d\n", rdr->ratelimitecm); }
 }
 
+static void ecmunique_fn(const char *token, char *value, void *setting, FILE *f)
+{
+	struct s_reader *rdr = setting;
+	if(value)
+	{
+		if(strlen(value) == 0)
+		{
+			rdr->ecmunique = 0; // default
+		}
+		else
+		{
+			rdr->ecmunique = atoi(value);
+			if(rdr->ecmunique >= 1) 
+			{ rdr->ecmunique=1; }
+			else
+			{ rdr->ecmunique=0; }
+		}
+		return;
+	}
+	if((rdr->ratelimitecm && rdr->ecmunique!=0) || cfg.http_full_cfg)
+		{ fprintf_conf(f, token, "%d\n", rdr->ecmunique); }
+}
+
 static void ratelimittime_fn(const char *token, char *value, void *setting, FILE *f)
 {
 	struct s_reader *rdr = setting;
@@ -729,6 +753,7 @@ static void ratelimittime_fn(const char *token, char *value, void *setting, FILE
 	if(rdr->ratelimitecm || cfg.http_full_cfg)
 		{ fprintf_conf(f, token, "%d\n", rdr->ratelimittime); }
 }
+
 static void srvidholdtime_fn(const char *token, char *value, void *setting, FILE *f)
 {
 	struct s_reader *rdr = setting;
@@ -887,6 +912,7 @@ static const struct config_list reader_opts[] =
 	DEF_OPT_INT8("fallback"             , OFS(fallback),                0),
 	DEF_OPT_FUNC_X("fallback_percaid"   , OFS(fallback_percaid),        ftab_fn, FTAB_READER | FTAB_FBPCAID),
 	DEF_OPT_FUNC_X("localcards"         , OFS(localcards),        		ftab_fn, FTAB_READER | FTAB_LOCALCARDS),
+	DEF_OPT_FUNC_X("disablecrccws_only_for", OFS(disablecrccws_only_for),     ftab_fn, FTAB_READER | FTAB_IGNCHKSMCAID),
 #ifdef CS_CACHEEX
 	DEF_OPT_INT8("cacheex"              , OFS(cacheex.mode),            0),
 	DEF_OPT_INT8("cacheex_maxhop"       , OFS(cacheex.maxhop),          0),
@@ -978,6 +1004,7 @@ static const struct config_list reader_opts[] =
 #endif
 #ifdef WITH_EMU
 	DEF_OPT_FUNC_X("emu_auproviders"    , OFS(emu_auproviders),         ftab_fn, FTAB_READER | FTAB_EMUAU),
+	DEF_OPT_INT8("emu_datecodedenabled" , OFS(emu_datecodedenabled),    0),
 	DEF_OPT_STR("extee36"               , OFS(extee36),                 NULL),
 	DEF_OPT_STR("extee56"               , OFS(extee56),                 NULL),
 	DEF_OPT_HEX("dre36_force_group"     , OFS(dre36_force_group),       1),
@@ -988,8 +1015,8 @@ static const struct config_list reader_opts[] =
 	DEF_OPT_FUNC("auprovid"             , 0,                            auprovid_fn),
 	DEF_OPT_INT8("ndsversion"           , OFS(ndsversion),              0),
 	DEF_OPT_FUNC("ratelimitecm"         , 0,                            ratelimitecm_fn),
+	DEF_OPT_FUNC("ecmunique"            , 0,                            ecmunique_fn),
 	DEF_OPT_FUNC("ratelimittime"        , 0,                            ratelimittime_fn),
-	DEF_OPT_INT8("ecmunique"            , OFS(ecmunique),               0),
 	DEF_OPT_FUNC("srvidholdtime"        , 0,                            srvidholdtime_fn),
 	DEF_OPT_FUNC("cooldown"             , 0,                            cooldown_fn),
 	DEF_OPT_FUNC("cooldowndelay"        , 0,                            cooldowndelay_fn),

@@ -83,7 +83,7 @@ static void stapi_off(void)
 	stapi_on = 0;
 	for(i = 0; i < MAX_DEMUX; i++)
 	{
-		dvbapi_stop_descrambling(i);
+		dvbapi_stop_descrambling(i, 0);
 	}
 
 	for(i = 0; i < PTINUM; i++)
@@ -290,7 +290,7 @@ int32_t stapi_set_filter(int32_t demux_id, uint16_t pid, uchar *filter, uchar *m
 		cs_log_dbg(D_DVBAPI, "No matching S: line in oscam.dvbapi for pmtfile %s -> stop descrambling!", pmtfile);
 		snprintf(dest, sizeof(dest), "%s%s", TMPDIR, demux[demux_id].pmt_file);
 		unlink(dest); // remove obsolete pmt file
-		dvbapi_stop_descrambling(demux_id);
+		dvbapi_stop_descrambling(demux_id, 0);
 	}
 	return ret;
 }
@@ -543,7 +543,7 @@ static void *stapi_read_thread(void *sparam)
 						demux_id = i;
 						filter_num = j;
 
-						dvbapi_process_input(demux_id, filter_num, buf, DataSize);
+						dvbapi_process_input(demux_id, filter_num, buf, DataSize, 0);
 					}
 				}
 			}
@@ -702,26 +702,26 @@ int32_t stapi_write_cw(int32_t demux_id, uchar *cw, uint16_t *STREAMpids, int32_
 		}
 
 		if(demux[demux_id].DescramblerHandle[n] == 0) { continue; }
-		
-		int32_t pidnum = demux[demux_id].pidindex; // get current pidindex used for descrambling
-		ca_index_t idx = demux[demux_id].ECMpids[pidnum].index[0];
-
-		if(idx == INDEX_INVALID)   // if no indexer for this pid get one!
-		{
-			idx = dvbapi_get_descindex(demux_id, pidnum, 0);
-			cs_log_dbg(D_DVBAPI, "Demuxer %d PID: %d CAID: %04X ECMPID: %04X is using index %d", demux_id, pidnum,
-					  demux[demux_id].ECMpids[pidnum].CAID, demux[demux_id].ECMpids[pidnum].ECM_PID, idx);
-		}
-		
+			
 		for(k = 0; k < STREAMpidcount; k++)
 		{
 			stapi_DescramblerAssociate(demux_id, STREAMpids[k], ASSOCIATE, n);
 		}
 	}
 
+	int32_t pidnum = demux[demux_id].pidindex; // get current pidindex used for descrambling
+	ca_index_t idx = demux[demux_id].ECMpids[pidnum].index[0];
+	
+	if(idx == INDEX_INVALID)   // if no indexer for this pid get one!
+	{
+		idx = dvbapi_get_descindex(demux_id, pidnum, 0);
+		cs_log_dbg(D_DVBAPI, "Demuxer %d PID: %d CAID: %04X ECMPID: %04X is using index %d", demux_id, pidnum,
+			demux[demux_id].ECMpids[pidnum].CAID, demux[demux_id].ECMpids[pidnum].ECM_PID, idx);
+	}	
+
 	for(l = 0; l < 2; l++)
 	{
-		if(memcmp(cw + (l * 8), demux[demux_id].lastcw[l], 8) != 0 && memcmp(cw + (l * 8), nullcw, 8) != 0)
+		if(memcmp(cw + (l * 8), demux[demux_id].lastcw[l], 8) != 0 && (memcmp(cw + (l * 8), nullcw, 8) != 0 || demux[demux_id].ECMpids[pidnum].CAID == 0x2600))
 		{
 			for(n = 0; n < PTINUM; n++)
 			{

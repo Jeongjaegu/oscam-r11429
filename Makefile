@@ -52,7 +52,7 @@ ifeq ($(uname_S),FreeBSD)
 LIB_DL :=
 endif
 
-override STD_LIBS := $(LIB_PTHREAD) $(LIB_DL) $(LIB_RT)
+override STD_LIBS := -lm $(LIB_PTHREAD) $(LIB_DL) $(LIB_RT)
 override STD_DEFS := -D'CS_SVN_VERSION="$(SVN_REV)"'
 override STD_DEFS += -D'CS_CONFDIR="$(CONF_DIR)"'
 
@@ -67,7 +67,7 @@ STRIP = $(CROSS_DIR)$(CROSS)strip
 
 LDFLAGS = -Wl,--gc-sections
 
-TARGETHELP := $(shell $(CC) --target-help)
+TARGETHELP := $(shell $(CC) --target-help 2>&1)
 ifneq (,$(findstring sse2,$(TARGETHELP)))
 override CFLAGS += -fexpensive-optimizations -mmmx -msse -msse2 -msse3
 else
@@ -298,7 +298,9 @@ SRC-$(CONFIG_CS_CACHEEX) += module-csp.c
 SRC-$(CONFIG_CW_CYCLE_CHECK) += module-cw-cycle-check.c
 SRC-$(CONFIG_WITH_AZBOX) += module-dvbapi-azbox.c
 SRC-$(CONFIG_WITH_MCA) += module-dvbapi-mca.c
-SRC-$(CONFIG_WITH_COOLAPI) += module-dvbapi-coolapi.c
+### SRC-$(CONFIG_WITH_COOLAPI) += module-dvbapi-coolapi.c 
+### experimental reversed API
+SRC-$(CONFIG_WITH_COOLAPI) += module-dvbapi-coolapi-legacy.c
 SRC-$(CONFIG_WITH_COOLAPI2) += module-dvbapi-coolapi.c
 SRC-$(CONFIG_WITH_SU980) += module-dvbapi-coolapi.c
 SRC-$(CONFIG_WITH_STAPI) += module-dvbapi-stapi.c
@@ -307,6 +309,7 @@ SRC-$(CONFIG_HAVE_DVBAPI) += module-dvbapi-chancache.c
 SRC-$(CONFIG_HAVE_DVBAPI) += module-dvbapi.c
 SRC-$(CONFIG_MODULE_GBOX) += module-gbox-helper.c
 SRC-$(CONFIG_MODULE_GBOX) += module-gbox-sms.c
+SRC-$(CONFIG_MODULE_GBOX) += module-gbox-remm.c
 SRC-$(CONFIG_MODULE_GBOX) += module-gbox-cards.c
 SRC-$(CONFIG_MODULE_GBOX) += module-gbox.c
 SRC-$(CONFIG_IRDETO_GUESSING) += module-ird-guess.c
@@ -337,6 +340,11 @@ SRC-$(CONFIG_READER_DRE) += reader-dre-st20.c
 SRC-$(CONFIG_READER_GRIFFIN) += reader-griffin.c
 SRC-$(CONFIG_READER_IRDETO) += reader-irdeto.c
 SRC-$(CONFIG_READER_NAGRA) += reader-nagra.c
+SRC-$(CONFIG_READER_NAGRA_MERLIN) += cscrypt/mdc2.c
+SRC-$(CONFIG_READER_NAGRA_MERLIN) += cscrypt/aescbc.c
+SRC-$(CONFIG_READER_NAGRA_MERLIN) += cscrypt/fast_aes.c
+SRC-$(CONFIG_READER_NAGRA_MERLIN) += cscrypt/sha256.c
+SRC-$(CONFIG_READER_NAGRA_MERLIN) += reader-nagracak7.c
 SRC-$(CONFIG_READER_SECA) += reader-seca.c
 SRC-$(CONFIG_READER_TONGFANG) += reader-tongfang.c
 SRC-$(CONFIG_READER_STREAMGUARD) += reader-streamguard.c

@@ -2,6 +2,7 @@
 
 #ifdef WITH_CARDREADER
 
+#include "module-gbox.h"
 #include "module-led.h"
 #include "oscam-chk.h"
 #include "oscam-client.h"
@@ -46,7 +47,7 @@ int32_t reader_cmd2icc(struct s_reader *reader, const uchar *buf, const int32_t 
 	int32_t rc;
 	*p_cta_lr = CTA_RES_LEN - 1; //FIXME not sure whether this one is necessary
 	rdr_log_dump_dbg(reader, D_READER, buf, l, "write to cardreader");
-	rc = ICC_Async_CardWrite(reader, (uchar *)buf, (uint16_t)l, cta_res, p_cta_lr);
+	rc = ICC_Async_CardWrite(reader, (uchar *)buf, (uint16_t)l, cta_res, p_cta_lr, 0);
 	return rc;
 }
 
@@ -222,6 +223,7 @@ void cardreader_do_reset(struct s_reader *reader)
 		}
 			if (ret){
 				rdr_log(reader,"THIS WAS A SUCCESSFUL START ATTEMPT No  %u out of max alloted of %u", (i+1), j);
+				gbx_local_card_changed();
 				break;
 			}
 			else {
@@ -285,6 +287,7 @@ int32_t cardreader_do_checkhealth(struct s_reader *reader)
 				cl->lastecm = 0;
 			}
 			led_status_card_ejected();
+			gbx_local_card_changed();
 		}
 		reader->card_status = NO_CARD;
 	}

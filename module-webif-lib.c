@@ -296,6 +296,8 @@ int32_t check_auth(char *authstring, char *method, char *path, IN_ADDR_T addr, c
 			}
 		}
 	}
+		if(!authok)
+		{	cs_log("unauthorized access from %s - invalid credentials", cs_inet_ntoa(addr)); }
 	return authok;
 }
 
@@ -782,12 +784,12 @@ struct CRYPTO_dynlock_value
 };
 
 /* function really needs unsigned long to prevent compiler warnings... */
-static unsigned long SSL_id_function(void)
+unsigned long SSL_id_function(void)
 {
 	return ((unsigned long) pthread_self());
 }
 
-static void SSL_locking_function(int32_t mode, int32_t type, const char *file, int32_t line)
+void SSL_locking_function(int32_t mode, int32_t type, const char *file, int32_t line)
 {
 	if(mode & CRYPTO_LOCK)
 	{
@@ -801,7 +803,7 @@ static void SSL_locking_function(int32_t mode, int32_t type, const char *file, i
 	if(file || line) { return; }
 }
 
-static struct CRYPTO_dynlock_value *SSL_dyn_create_function(const char *file, int32_t line)
+struct CRYPTO_dynlock_value *SSL_dyn_create_function(const char *file, int32_t line)
 {
 	struct CRYPTO_dynlock_value *l;
 	if(!cs_malloc(&l, sizeof(struct CRYPTO_dynlock_value)))
@@ -819,7 +821,7 @@ static struct CRYPTO_dynlock_value *SSL_dyn_create_function(const char *file, in
 	return l;
 }
 
-static void SSL_dyn_lock_function(int32_t mode, struct CRYPTO_dynlock_value *l, const char *file, int32_t line)
+void SSL_dyn_lock_function(int32_t mode, struct CRYPTO_dynlock_value *l, const char *file, int32_t line)
 {
 	if(mode & CRYPTO_LOCK)
 	{
@@ -833,7 +835,7 @@ static void SSL_dyn_lock_function(int32_t mode, struct CRYPTO_dynlock_value *l, 
 	if(file || line) { return; }
 }
 
-static void SSL_dyn_destroy_function(struct CRYPTO_dynlock_value *l, const char *file, int32_t line)
+void SSL_dyn_destroy_function(struct CRYPTO_dynlock_value *l, const char *file, int32_t line)
 {
 	pthread_mutex_destroy(&l->mutex);
 	NULLFREE(l);
@@ -919,7 +921,10 @@ SSL_CTX *SSL_Webif_Init(void)
 
 out_err:
 	ERR_print_errors_fp(stderr);
+#if OPENSSL_VERSION_NUMBER < 0x1010005fL
+    // fix build "OpenSSL 1.1.0e  16 Feb 2017"
 	ERR_remove_state(0);
+#endif
 	SSL_CTX_free(ctx);
 	return NULL;
 }
